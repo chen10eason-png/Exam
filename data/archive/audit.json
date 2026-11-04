@@ -1,0 +1,10 @@
+{
+  "status": "source-manifest-missing",
+  "completeInventory": false,
+  "expectedRecords": null,
+  "expectedPapers": null,
+  "missing": [],
+  "errors": [
+    "沒有已下載的官方歷屆資料分卷清單"
+  ]
+}
