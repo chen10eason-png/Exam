@@ -123,6 +123,7 @@ def main():
     expected_total = sum(declared.values())
     if expected_total != manifest.get('total_rows'): raise ValueError('manifest row total does not match sum of partitions')
     a.out.mkdir(parents=True, exist_ok=True)
+    (a.out/'source-manifest.json').write_bytes(mbytes)  # exact upstream scope for later audits
     papers_dir = a.out/'papers'
     papers_dir.mkdir(parents=True,exist_ok=True)
     catalog_path = a.out/'catalog.json'
