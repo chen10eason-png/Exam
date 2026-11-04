@@ -10,43 +10,63 @@ const unitById=new Map(units.map(t=>[t.id,t]));
 async function loadCatalog(){
  const summary=$('#bulkSummary');
  try{
-  let resp=await fetch('./data/archive/catalog.json',{cache:'no-store'});
-  if(!resp.ok)throw Error('HTTP '+resp.status);
-  catalog=await resp.json();
-  summary.textContent=catalog.importedPapers?
-   `來源資料已匯入 ${catalog.importedPapers} 份、${catalog.importedRecords} 題；其中 ${catalog.readableRecords} 題有可讀題幹。AI 單元分類與逐題原卷核對尚未完成。`:
-   '尚未執行大量歷屆真題匯入，這裡目前沒有可查詢的逐題資料。';
+  const localResponse=await fetch('./data/archive/catalog.json',{cache:'no-store'});
+  if(!localResponse.ok)throw Error('本地目錄 HTTP '+localResponse.status);
+  const local=await localResponse.json();
+  catalog=local;
+  const localPapers=Array.isArray(local.papers)?local.papers:[];
+  try{
+   if(!window.ATLAS_REMOTE_ARCHIVE)throw Error('遠端來源載入器不存在');
+   const remote=await window.ATLAS_REMOTE_ARCHIVE.loadManifest();
+   const stored=new Map(localPapers.map(p=>[p.sourceFile,p]));
+   remote.papers=remote.papers.map(p=>stored.get(p.sourceFile)||p);
+   remote.importedPapers=localPapers.length;
+   remote.importedRecords=local.importedRecords||0;
+   remote.readableRecords=local.readableRecords||0;
+   remote.aiClassifiedRecords=local.aiClassifiedRecords||0;
+   remote.verifiedRecords=local.verifiedRecords||0;
+   remote.missingPapers=Math.max(0,remote.papers.length-localPapers.length);
+   catalog=remote;
+   summary.textContent=`公開來源共列 ${remote.expectedPapersFromRemoteManifest.toLocaleString()} 份分卷、${remote.expectedRecordsFromRemoteManifest.toLocaleString()} 筆逐題紀錄。本站已自行保存 ${remote.importedPapers} 份、${remote.importedRecords} 筆；其餘會在你選取試卷時從公開來源即時讀取。來源中的題目尚未全部完成原卷核對或 AI 分類。`;
+  }catch(err){
+   summary.textContent=localPapers.length?
+    `可使用已儲存 ${localPapers.length} 份、${local.importedRecords||0} 筆資料；公開歷屆來源目前無法連線（${err.message}）。`:
+    `還沒有已儲存的真題，公開歷屆來源也未成功連線：${err.message}。請檢查網路，稍後重新載入。`;
+  }
   const papers=catalog.papers||[];
   sel('#bulkExam',[...new Set(papers.map(x=>x.exam))].sort(),'所有考試');
   sel('#bulkYear',[...new Set(papers.map(x=>x.year))].sort((a,b)=>b-a),'所有學年度');
   sel('#bulkSubject',[...new Set(papers.map(x=>x.subject))].sort((a,b)=>a.localeCompare(b,'zh-Hant')),'所有考科');
   renderPapers();
- }catch(e){summary.textContent='無法讀取大規模題庫目錄：'+e.message;}
+ }catch(err){summary.textContent='無法讀取歷屆試題資料：'+err.message;}
 }
 function renderPapers(){
  const root=$('#bulkPapers');if(!catalog)return;
  const exam=$('#bulkExam').value,year=$('#bulkYear').value,subject=$('#bulkSubject').value;
  let filtered=(catalog.papers||[]).filter(p=>(!exam||p.exam===exam)&&(!year||String(p.year)===year)&&(!subject||p.subject===subject));
- $('#bulkListCount').textContent=`${filtered.length} 份試卷`;
- if(filtered.length>80){filtered=filtered.slice(0,80);$('#bulkListCount').textContent+='（僅顯示前 80 份，請縮小條件）';}
- root.innerHTML=filtered.length?filtered.map(p=>`<button class="bulk-paper" data-file="${esc(p.file)}"><strong>${esc(p.year)} ${esc(p.exam)} ${esc(p.subject)}</strong><small>${p.count} 題 · 可讀 ${p.readable} 題 · 需核對</small></button>`).join(''):'<p class="mini-hint">此條件下尚未取得逐題資料。</p>';
- root.querySelectorAll('button[data-file]').forEach(b=>b.addEventListener('click',()=>loadPaper(b.dataset.file)));
+ $('#bulkListCount').textContent=`共 ${filtered.length} 份試卷`;
+ if(filtered.length>80){filtered=filtered.slice(0,80);$('#bulkListCount').textContent+='（先顯示 80 份；可選年度或科目縮小範圍）';}
+ root.innerHTML=filtered.length?filtered.map((p,i)=>`<button class="bulk-paper" data-path="${esc(p.sourceFile)}"><strong>${esc(p.year)} ${esc(p.exam)} ${esc(p.subject)}</strong><small>${p.count} 筆題目 · ${p.file?'本網站已保存':'選取時讀取公開資料'} · 尚待逐題核對</small></button>`).join(''):'<p class="mini-hint">沒有符合篩選條件的試卷。</p>';
+ root.querySelectorAll('button[data-path]').forEach(b=>b.addEventListener('click',()=>loadPaper(b.dataset.path)));
 }
-async function loadPaper(file){
- if(!catalog?.papers.some(p=>p.file===file))return;
- const detail=$('#bulkQuestions');detail.textContent='讀取題目中…';
+async function loadPaper(path){
+ const p=catalog?.papers.find(p=>p.sourceFile===path);if(!p)return;
+ const detail=$('#bulkQuestions');detail.textContent='讀取原題中，這份試卷可能需要網路連線…';
  try{
-  const r=await fetch('./'+file,{cache:'default'});
-  if(!r.ok)throw Error('HTTP '+r.status);
-  const payload=await r.json();
-  if(payload.schema!=='exam-atlas-open-archive-v1'||!Array.isArray(payload.questions))throw Error('格式不符');
-  paper=payload;
-  selected=catalog.papers.find(p=>p.file===file);
-  $('#bulkChosen').textContent=`${selected.year} 年 ${selected.exam} ${selected.subject} · ${paper.questions.length} 道題`;
-  $('#bulkKeyword').value='';
-  $('#bulkReadability').value='';$('#bulkTopic').value='';$('#bulkDifficulty').value='';
+  let payload;
+  if(p.file){
+   const response=await fetch('./'+p.file);
+   if(!response.ok)throw Error('本地試卷 HTTP '+response.status);
+   payload=await response.json();
+  }else{
+   payload=await window.ATLAS_REMOTE_ARCHIVE.loadPaper(p);
+  }
+  if(payload.schema!=='exam-atlas-open-archive-v1'||!Array.isArray(payload.questions)||payload.questions.length!==p.count)throw Error('題目數量或格式不符');
+  paper=payload;selected=p;
+  $('#bulkChosen').textContent=`${p.year} 年 ${p.exam} ${p.subject} · ${paper.questions.length} 筆（${p.file?'本地分卷':'公開來源即時讀取'}）`;
+  $('#bulkKeyword').value='';$('#bulkReadability').value='';$('#bulkTopic').value='';$('#bulkDifficulty').value='';
   renderQuestions();
- }catch(e){detail.textContent='讀取失敗：'+e.message;}
+ }catch(err){detail.textContent='這份試卷讀取失敗或資料不足：'+err.message+'。可從上方官方歷屆索引開啟原卷。';}
 }
 function renderQuestions(){
  const root=$('#bulkQuestions');if(!paper)return;
