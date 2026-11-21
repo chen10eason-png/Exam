@@ -22,7 +22,7 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / 'data' / 'archive'
-BASE = 'https://raw.githubusercontent.com/rbnyng/ceec/main/'
+BASE = 'https://raw.githubusercontent.com/rbnyng/ceec/4d87bdc12fb68dd2e719009d80017510aa789cce/'
 MANIFEST = 'data/items/partition_manifest.json'
 PATH_RE = re.compile(r'^data/items/(學測|學測補|指考|指考補|分科)/(\d{2,3})/([a-z][a-z0-9_]*)\.jsonl$')
 INDEX_URLS = {
