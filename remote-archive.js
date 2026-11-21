@@ -8,7 +8,8 @@
   if (root) root.ATLAS_REMOTE_ARCHIVE = api;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : null), function () {
   'use strict';
-  const base = 'https://raw.githubusercontent.com/rbnyng/ceec/main/';
+  const REV = '4d87bdc12fb68dd2e719009d80017510aa789cce';
+  const base = `https://raw.githubusercontent.com/rbnyng/ceec/${REV}/`;
   const manifestPath = 'data/items/partition_manifest.json';
   const re = /^data\/items\/(學測|學測補|指考|指考補|分科)\/(\d{2,3})\/([a-z][a-z0-9_]*)\.jsonl$/;
   const names = {
@@ -62,11 +63,15 @@
     if(row.group_id&&!row.group_passage) issues.push('shared_context_may_be_missing');
     const id=String(row.item_uid||`${exam}${year}-${key}-${row.number||'unknown'}`);
     const score=typeof row.p_value==='number'?row.p_value:null;
-    return {id,exam:String(row.exam_system||exam),year:Number(row.year_roc||year),subject:String(row.subject_zh||names[key]||key),subjectKey:key,
+    const subject=String(row.subject_zh||names[key]||key);
+    const helper=(typeof window!=='undefined'&&window.ATLAS_TOPIC_HINTS)||null;
+    const course=(typeof window!=='undefined'&&window.ATLAS_CURRICULUM)||[];
+    const hint=helper?.suggest({subject,question,groupPassage:row.group_passage},course)||{topicIds:[],confidence:0};
+    return {id,exam:String(row.exam_system||exam),year:Number(row.year_roc||year),subject,subjectKey:key,
       number:row.number,question,options:opts,answerKey,section:String(row.section||''),
       groupId:row.group_id||null,groupPassage:row.group_passage||null,multiple:!!row.multi_select,
       officialScorePercent:score,difficulty:calcDifficulty(score),difficultyMethod:score===null?'unassigned':'official-score-percent-estimate',
-      topicIds:[],aiClassified:false,sourceVerified:false,reviewed:false,readable,hasAnswerOptions,issues:[...new Set(issues)],
+      topicIds:hint.topicIds,topicHint:hint,aiClassified:false,sourceVerified:false,reviewed:false,readable,hasAnswerOptions,issues:[...new Set(issues)],
       source:'rbnyng/ceec',sourceFile:path,officialIndex:officialIndex[exam]};
   }
   function parsePaper(text,path,expectedCount) {
@@ -85,7 +90,7 @@
   async function getText(path,{fetchImpl=fetch,timeoutMs=15000}={}) {
     // Same public repository through two hosts; do not silently substitute another dataset.
     const main=url(path);
-    const cdn='https://cdn.jsdelivr.net/gh/rbnyng/ceec@main/'+path.split('/').map(encodeURIComponent).join('/');
+    const cdn=`https://cdn.jsdelivr.net/gh/rbnyng/ceec@${REV}/`+path.split('/').map(encodeURIComponent).join('/');
     let last;
     for(const endpoint of [main,cdn]){
       const controller=new AbortController();
@@ -98,7 +103,17 @@
     }
     throw Error('兩個公開資料來源皆無法連線：'+(last?.message||'未知錯誤'));
   }
-  async function loadManifest(opts){return manifestToCatalog(JSON.parse(await getText(manifestPath,opts)));}
+  async function loadManifest(opts){
+    try{return manifestToCatalog(JSON.parse(await getText(manifestPath,opts)));}
+    catch(err){
+      // A complete, checked-in manifest keeps every historical year visible when
+      // the upstream manifest/CDN is temporarily unreachable; item bodies still
+      // require a per-paper source or IndexedDB copy.
+      const seed=(typeof window!=='undefined'&&window.ATLAS_SEED_MANIFEST)||null;
+      if(seed?.revision===REV){const result=manifestToCatalog(seed);result.seeded=true;return result;}
+      throw err;
+    }
+  }
   async function loadPaper(p,opts){if(!p?.remote)throw Error('不是可讀取的遠端分卷');return parsePaper(await getText(p.sourceFile,opts),p.sourceFile,p.count);}
-  return {url,calcDifficulty,manifestToCatalog,transform,parsePaper,getText,loadManifest,loadPaper};
+  return {REV,url,calcDifficulty,manifestToCatalog,transform,parsePaper,getText,loadManifest,loadPaper};
 });

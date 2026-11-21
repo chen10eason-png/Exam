@@ -40,7 +40,7 @@ function shuffle(items){let a=items.slice();for(let i=a.length-1;i>0;i--){const 
 function grade(q,selection){const actual=[...new Set(Array.isArray(selection)?selection:[])].sort().join('');return actual===keyFor(q).split('').sort().join('');}
 const DEFAULT_EXAM='學測',DEFAULT_SUBJECT='國綜';
 function init(w){
- const d=w.document,remote=w.ATLAS_REMOTE_ARCHIVE;
+ const d=w.document,remote=w.ATLAS_REMOTE_ARCHIVE,pdf=w.ATLAS_PDF_ARCHIVE,download=w.ATLAS_FULL_DOWNLOAD;
  if(!d.getElementById('page-real'))return;
  const $=id=>d.getElementById(id);
  let catalog=null,paper=null,current=null,list=[],quiz=null,view='questions';
@@ -60,14 +60,15 @@ function init(w){
   $('realSourceNote').textContent=catalog?.remote?'目前可依試卷從外部公開資料源讀取；需網路連線，所有擷取內容均須核對原卷。':`已保存 ${catalog?.importedRecords||0} 筆；外部來源未成功更新。`;
  }
  function onExam(){const exam=$('realExam').value,prev=$('realYear').value;const ys=availableYears(catalog?.papers||[],exam);optionValues($('realYear'),ys,ys.includes(Number(prev))?prev:(exam==='學測'&&ys.includes(115)?115:ys[0]));onYear();}
- function onYear(){const opts=availableSubjects(catalog?.papers||[],$('realExam').value,$('realYear').value);const current=$('realSubject').value;optionValues($('realSubject'),opts,opts.includes(current)?current:(opts.includes(DEFAULT_SUBJECT)?DEFAULT_SUBJECT:opts[0]));$('realPaperInfo').textContent=visiblePapers().length?`${visiblePapers().length} 份分卷，合計 ${visiblePapers().reduce((n,p)=>n+p.count,0).toLocaleString()} 筆來源紀錄`:'目前此選擇沒有資料';}
+ async function refreshPdfLinks(){const el=$('realPdfLinks');if(!el||!pdf)return;const ex=$('realExam').value,y=$('realYear').value,subject=$('realSubject').value;if(!ex||!y||!subject){el.textContent='請先選年份與考科';return;}const id=`${ex}:${y}:${subject}`;el.dataset.request=id;el.innerHTML='<b>對照 PDF 原卷</b>'+pdf.html(null,{loading:true});const links=await pdf.resolve(ex,y,subject);if(el.dataset.request===id)el.innerHTML=`<b>${y} ${ex}・${subject}｜三種 PDF</b>`+pdf.html(links);}
+ function onYear(){const opts=availableSubjects(catalog?.papers||[],$('realExam').value,$('realYear').value);const current=$('realSubject').value;optionValues($('realSubject'),opts,opts.includes(current)?current:(opts.includes(DEFAULT_SUBJECT)?DEFAULT_SUBJECT:opts[0]));$('realPaperInfo').textContent=visiblePapers().length?`${visiblePapers().length} 份分卷，合計 ${visiblePapers().reduce((n,p)=>n+p.count,0).toLocaleString()} 筆來源紀錄`:'目前此選擇沒有資料';refreshPdfLinks();}
  async function openCatalog(){
   message('正在讀取歷屆分卷索引…');let local=null,net=null,error=null;
   try{const res=await w.fetch('./data/archive/catalog.json',{cache:'no-store'});if(res.ok)local=await res.json();}catch{}
-  try{if(!remote)throw Error('缺少 remote-archive.js');net=await remote.loadManifest();}catch(e){error=e;}
+  try{if(!remote)throw Error('缺少 remote-archive.js');net=await remote.loadManifest();if(download)download.cacheCatalog(remote,net).catch(()=>{});}catch(e){error=e;if(remote&&download)net=await download.savedCatalog(remote).catch(()=>null);}
   catalog=extractCatalog(net,local);if(net)catalog.remote=true;
   if(!catalog.papers?.length){message('沒有可讀的真題目錄。請確認網路連線與遠端題庫來源：'+(error?.message||'尚未匯入題目'),'error');$('realLoad').disabled=true;return;}
-  setupControls();$('realLoad').disabled=false;message(net?'題庫索引已載入，正在載入預設試卷…':`遠端連線失敗，使用已儲存試卷：${error?.message||''}`,'success');await loadPaper();
+  setupControls();if(download&&remote)download.status(remote,catalog).then(st=>{if(progressEl&&!busyDownloading)progressEl.textContent=`此裝置目前已儲存 ${st.storedPapers}/${st.totalPapers} 份、${st.storedItems.toLocaleString()}/${st.totalItems.toLocaleString()} 筆。按「全部下載」可逐份取得題目並離線保存。`}).catch(()=>{});$('realLoad').disabled=false;message(net?'題庫索引已載入，正在載入預設試卷…':`遠端連線失敗，使用已儲存試卷：${error?.message||''}`,'success');await loadPaper();
  }
  async function loadPaper(){
   const requested=visiblePapers();if(!requested.length){message('請選擇有試卷的科目或年份','error');return;}
@@ -79,7 +80,7 @@ function init(w){
         try{
           let result;
           if(p.file){const res=await w.fetch('./'+p.file);if(!res.ok)throw Error('本地資料 HTTP '+res.status);result=await res.json();}
-          else {if(!remote)throw Error('遠端讀取器缺失');result=await remote.loadPaper(p);}
+          else {if(!remote)throw Error('遠端讀取器缺失');result=download?await download.load(remote,p):await remote.loadPaper(p);}
           if(!Array.isArray(result.questions)||result.questions.length!==p.count)throw Error('題數與清單不符');
           output.push({year:p.year,questions:result.questions});
         }catch(err){failed.push(`${p.year} ${p.subject}: ${err.message}`);}
@@ -137,6 +138,24 @@ function init(w){
  ['realExam','realYear','realSubject','realYearMode'].forEach(id=>$(id).addEventListener('change',id==='realExam'?onExam:onYear));
  ['realSearch','realQuality','realDifficulty','realTopic','realWrongOnly'].forEach(id=>$(id).addEventListener(id==='realSearch'?'input':'change',updateResults));
  $('realLoad').addEventListener('click',loadPaper);$('realRetry').addEventListener('click',openCatalog);$('realQuizStart').addEventListener('click',startQuiz);
+ let stopRequested=false,busyDownloading=false;
+ const importButton=$('realImportAll'),stopButton=$('realImportStop'),progressEl=$('realImportProgress');
+ async function startFullImport(){
+   if(!download||!remote||!catalog?.papers?.length||busyDownloading)return;
+   busyDownloading=true;stopRequested=false;importButton.disabled=true;stopButton.disabled=false;
+   try{
+     const done=await download.downloadAll(remote,catalog,{concurrency:4,shouldStop:()=>stopRequested,onProgress:p=>{
+       const pct=(100*p.done/p.total).toFixed(1);
+       progressEl.textContent=`已檢查 ${p.done}/${p.total} 份（${pct}%），已儲存 ${p.records.toLocaleString()} 筆；新下載 ${p.downloaded} 份、既有 ${p.skipped} 份、失敗 ${p.failed} 份。`;
+     }});
+     progressEl.textContent+=done.stopped?' 已暫停，下次可從尚未下載的試卷接續。':done.failed?' 已完成本輪下載；失敗的分卷可再次按鈕重試。':' 全部分卷已儲存到本裝置。';
+     if(done.errors.length)progressEl.textContent+=` 最近錯誤：${done.errors.slice(0,2).map(x=>x.sourceFile+' '+x.reason).join('；')}`;
+   }catch(e){progressEl.textContent='批次匯入失敗：'+e.message;}
+   finally{busyDownloading=false;importButton.disabled=false;stopButton.disabled=true;}
+ }
+ if(importButton)importButton.addEventListener('click',startFullImport);
+ if(stopButton)stopButton.addEventListener('click',()=>{stopRequested=true;stopButton.disabled=true;});
+
  $('realPrev').addEventListener('click',()=>{if(quiz&&quiz.index>0){quiz.index--;renderQuiz();}});
  $('realNext').addEventListener('click',()=>{if(!quiz)return;if(quiz.index<quiz.questions.length-1){quiz.index++;renderQuiz();}else finish();});
  $('realCancel').addEventListener('click',back);$('realExitOutcome').addEventListener('click',back);

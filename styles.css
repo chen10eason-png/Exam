@@ -88,3 +88,18 @@
 .real-config-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.real-load-action{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between}.real-load-action .mini-hint{margin:0}
 @media(max-width:1050px){.real-config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.real-config-grid{grid-template-columns:1fr}.real-load-action{flex-direction:column;align-items:stretch}}
+
+/* Three verified PDF targets for every historical paper */
+.paper-pdf-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}
+.paper-pdf-link{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:76px;gap:5px;padding:12px 13px;border:1px solid var(--line,#d8e0e8);border-radius:11px;background:var(--surface,#fff);text-decoration:none!important;line-height:1.4;color:var(--ink,#1a2636)}
+.paper-pdf-link span{font-weight:750}.paper-pdf-link small{font-size:11px;opacity:.73}
+.paper-pdf-link[href]:hover{border-color:#337bc7;background:#eff6ff}
+.paper-pdf-link.absent{color:#748195;background:#f6f7f9;cursor:default}
+.paper-index-link{display:inline-block;margin-top:4px;font-size:12px!important}
+.real-pdf-strip{padding:16px 18px;margin:14px 0}.real-pdf-strip>b{display:block;margin-bottom:5px}
+@media(max-width:560px){.paper-pdf-grid{grid-template-columns:1fr}.paper-pdf-link{min-height:58px}.real-pdf-strip{padding:12px}}
+
+/* Full-corpus import control */
+.atlas-download-panel{display:grid;gap:12px;margin:16px 0 22px;border:1px solid var(--border,#d9dde5);padding:18px;border-radius:16px;background:var(--surface,#fff)}
+.atlas-download-panel p{font-size:.91rem;line-height:1.6;color:var(--text-muted,#6b7484);margin:5px 0 0}
+.atlas-download-controls{display:flex;gap:10px;flex-wrap:wrap}.atlas-download-panel #realImportProgress{font-variant-numeric:tabular-nums;color:var(--text,#273247)}

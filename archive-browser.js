@@ -59,7 +59,7 @@ async function loadPaper(path){
    if(!response.ok)throw Error('本地試卷 HTTP '+response.status);
    payload=await response.json();
   }else{
-   payload=await window.ATLAS_REMOTE_ARCHIVE.loadPaper(p);
+   payload=window.ATLAS_FULL_DOWNLOAD?await window.ATLAS_FULL_DOWNLOAD.load(window.ATLAS_REMOTE_ARCHIVE,p):await window.ATLAS_REMOTE_ARCHIVE.loadPaper(p);
   }
   if(payload.schema!=='exam-atlas-open-archive-v1'||!Array.isArray(payload.questions)||payload.questions.length!==p.count)throw Error('題目數量或格式不符');
   paper=payload;selected=p;
