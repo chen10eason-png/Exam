@@ -6,6 +6,7 @@ const c=lib.manifestToCatalog(manifest);
 assert.equal(c.expectedPapersFromRemoteManifest,1);
 assert.equal(c.expectedRecordsFromRemoteManifest,2);
 assert.equal(c.papers[0].year,115);
+assert.ok(lib.url(path).includes('/4d87bdc12fb68dd2e719009d80017510aa789cce/')); 
 assert.equal(c.papers[0].subject,'國綜');
 const items=[
  {item_uid:'學測115-chinese_reading-001',exam_system:'學測',year_roc:115,subject_zh:'國綜',number:1,stem:'題目內容A',options:{A:'甲',B:'乙',C:'丙',D:'丁'},keys:'C',p_value:89,item_flags:[]},

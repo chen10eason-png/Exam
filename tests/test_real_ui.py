@@ -15,7 +15,7 @@ class RealUITest(unittest.TestCase):
    mock['data/items/partition_manifest.json']=json.dumps({'total_rows':2,'files':{PART:2}},ensure_ascii=False)
    mock[PART]='\n'.join(json.dumps(x,ensure_ascii=False) for x in DATA)+'\n'
   script='''window.TEST_FETCH=%s;
- window.fetch=async function(u){let str=String(u),k=str.includes('raw.githubusercontent.com/rbnyng/ceec/main/')?decodeURI(str.split('/main/')[1]):str;
+ window.fetch=async function(u){let str=String(u),k=str.includes('raw.githubusercontent.com/rbnyng/ceec/4d87bdc12fb68dd2e719009d80017510aa789cce/')?decodeURI(str.split('/4d87bdc12fb68dd2e719009d80017510aa789cce/')[1]):str;
   if(window.TEST_FETCH[k])return new Response(window.TEST_FETCH[k],{status:200,headers:{'Content-Type':'text/plain'}});
   return new Response('not found',{status:404});};'''%json.dumps(mock,ensure_ascii=False)
   raw=raw.replace('<div id="app">','<script>'+script+'</script><div id="app">')
@@ -41,14 +41,15 @@ class RealUITest(unittest.TestCase):
    self.assertIn('答對 1 / 1 題',page.locator('#realOutcome').inner_text())
    self.assertFalse(errors,errors)
    browser.close()
- def test_outage_is_honest(self):
+ def test_outage_shows_full_index_but_no_fake_questions(self):
   with sync_playwright() as p:
    browser=p.chromium.launch(headless=True,executable_path='/usr/bin/chromium',args=['--no-sandbox'])
    page=browser.new_page(viewport={'width':390,'height':844})
    errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    page.set_content(self.html(False),wait_until='load')
-   page.wait_for_function("document.querySelector('#realStatus').textContent.includes('沒有可讀的真題目錄')",timeout=12000)
-   self.assertTrue(page.locator('#realLoad').is_disabled())
+   page.wait_for_function("document.querySelector('#realStatus').textContent.includes('試卷讀取失敗')",timeout=12000)
+   self.assertIn('416 份分卷',page.locator('#realCount').inner_text())
+   self.assertTrue(page.locator('#realLoad').is_enabled())
    self.assertFalse(errors,errors)
    browser.close()
 if __name__=='__main__':unittest.main()

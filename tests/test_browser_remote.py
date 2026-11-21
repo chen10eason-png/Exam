@@ -15,7 +15,7 @@ class BrowserTest(unittest.TestCase):
   mock={ 'data/items/partition_manifest.json':json.dumps({'total_rows':2,'files':{PATH:2}},ensure_ascii=False),
          PATH:'\n'.join(json.dumps(x,ensure_ascii=False) for x in rows),
          './data/archive/catalog.json':json.dumps(local,ensure_ascii=False)}
-  script="window.fetch=async function(u){const k=String(u).startsWith('https://raw.githubusercontent.com/rbnyng/ceec/main/')?decodeURI(String(u).split('/main/')[1]):String(u);return new Response(window.TEST_FETCH[k]||'',{status:window.TEST_FETCH[k]?200:404});};"
+  script="window.fetch=async function(u){const k=String(u).startsWith('https://raw.githubusercontent.com/rbnyng/ceec/4d87bdc12fb68dd2e719009d80017510aa789cce/')?decodeURI(String(u).split('/4d87bdc12fb68dd2e719009d80017510aa789cce/')[1]):String(u);return new Response(window.TEST_FETCH[k]||'',{status:window.TEST_FETCH[k]?200:404});};"
   html=html.replace('<div id="app">','<script>window.TEST_FETCH='+json.dumps(mock,ensure_ascii=False)+';'+script+'</script><div id="app">')
   for m in list(re.finditer(r'<script src="([^"]+)"></script>',html)):
    src=m.group(1).lstrip('./')
